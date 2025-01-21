@@ -187,11 +187,11 @@ class AttDecoder(nn.Module):
                 word_context_weighted = self.word_context_weight(word_context_vec)
 
                 if self.params['dropout']:
-                    word_out_state = self.dropout(torch.maximum(
+                    word_out_state = self.dropout(torch.minimum(
                         (current_state + word_weighted_embedding + word_context_weighted),
                         localization_weighted))
                 else:
-                    word_out_state = torch.maximum((current_state + word_weighted_embedding + word_context_weighted),
+                    word_out_state = torch.minimum((current_state + word_weighted_embedding + word_context_weighted),
                                                    localization_weighted)
 
                 word_prob = self.word_convert(word_out_state)
@@ -210,11 +210,11 @@ class AttDecoder(nn.Module):
                 word_context_weighted = self.word_context_weight(word_context_vec)
 
                 if self.params['dropout']:
-                    word_out_state = self.dropout(torch.maximum(
+                    word_out_state = self.dropout(torch.minimum(
                         (current_state + word_weighted_embedding + word_context_weighted),
                         localization_weighted))
                 else:
-                    word_out_state = torch.maximum((current_state + word_weighted_embedding + word_context_weighted),
+                    word_out_state = torch.minimum((current_state + word_weighted_embedding + word_context_weighted),
                                                    localization_weighted)
 
                 word_prob = self.word_convert(word_out_state)
@@ -232,7 +232,6 @@ class AttDecoder(nn.Module):
 class SSAN_DWAP(nn.Module):
     def __init__(self, params=None):
         super(SSAN_DWAP, self).__init__()
-        print('SSAN_DWAP')
         self.params = params
         self.use_label_mask = params['use_label_mask']
         self.encoder = DenseNet(params=self.params)

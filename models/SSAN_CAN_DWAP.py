@@ -176,6 +176,7 @@ class AttDecoder(nn.Module):
         self.word_num = params['alphabet_num']
         self.counting_num = params['counting_decoder']['out_channel']
 
+        """经过cnn后 长宽与原始尺寸比缩小的比例"""
         self.ratio = params['densenet']['ratio']
 
         self.init_weight = nn.Linear(self.out_channel, self.hidden_size)
@@ -227,11 +228,11 @@ class AttDecoder(nn.Module):
                 word_context_weighted = self.word_context_weight(word_context_vec)
 
                 if self.params['dropout']:
-                    word_out_state = self.dropout(torch.maximum(
+                    word_out_state = self.dropout(torch.minimum(
                         (current_state + word_weighted_embedding + word_context_weighted),
                         localization_weighted) + counting_context_weighted)
                 else:
-                    word_out_state = torch.maximum((current_state + word_weighted_embedding + word_context_weighted),
+                    word_out_state = torch.minimum((current_state + word_weighted_embedding + word_context_weighted),
                                                    localization_weighted) + counting_context_weighted
 
                 word_prob = self.word_convert(word_out_state)
@@ -250,11 +251,11 @@ class AttDecoder(nn.Module):
                 word_context_weighted = self.word_context_weight(word_context_vec)
 
                 if self.params['dropout']:
-                    word_out_state = self.dropout(torch.maximum(
+                    word_out_state = self.dropout(torch.minimum(
                         (current_state + word_weighted_embedding + word_context_weighted),
                         localization_weighted) + counting_context_weighted)
                 else:
-                    word_out_state = torch.maximum((current_state + word_weighted_embedding + word_context_weighted),
+                    word_out_state = torch.minimum((current_state + word_weighted_embedding + word_context_weighted),
                                                    localization_weighted) + counting_context_weighted
 
                 word_prob = self.word_convert(word_out_state)
@@ -346,4 +347,4 @@ class SSAN_CAN_DWAP(nn.Module):
         word_probs, word_alphas = self.decoder(cnn_features, labels, counting_preds, local_fea, images_mask, labels_mask, is_train=is_train)
         word_loss = self.cross((word_probs.contiguous().view(-1, word_probs.shape[-1])), labels.view(-1))
         word_average_loss = (word_loss * labels_mask.view(-1)).sum() / (labels_mask.sum() + 1e-10) if self.use_label_mask else word_loss
-        return word_probs, [word_average_loss, counting_loss, spatial_loss], word_alphas
+        return word_probs, [word_average_loss, spatial_loss, counting_loss], word_alphas
