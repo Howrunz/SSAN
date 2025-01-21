@@ -2,7 +2,7 @@ GPU: '0,1'
 Test_GPU: '0'
 seed: 20230524
 experiment: ""
-model: 'SSAN_DWAP'
+model: 'SSAN_DWAP'  # SSAN_CAN_DWAP, SSAN_SAM_DWAP
 dataset_name: 'CROHME'
 curr_time: 3
 
@@ -54,9 +54,15 @@ loss:
   name:
     - word
     - spatial
+    # - counting  # Uncomment when use SSAN-CAN-DWAP
+    # - context  # Uncomment when use SSAN-SAM-DWAP
+    # - word_state  # Uncomment when use SSAN-SAM-DWAP
   weight:
     - 1
     - 1
+    # - 1  # Uncomment when use SSAN-CAN-DWAP
+    # - 1  # Uncomment when use SSAN-SAM-DWAP
+    # - 1  # Uncomment when use SSAN-SAM-DWAP
 
 densenet:
   ratio: 16
@@ -82,12 +88,6 @@ counting_decoder:
 attention:
   attention_dim: 512
   word_conv_kernel: 1
-
-attention_map_vis_path: 'vis/attention_map'
-counting_map_vis_path: 'vis/counting_map'
-
-whiten_type: None
-max_step: 256
 
 optimizer_save: False
 finetune: False

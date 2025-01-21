@@ -3,6 +3,7 @@ import time
 import subprocess
 import importlib
 import argparse
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -19,6 +20,7 @@ def eval_model(model, eval_loader):
     pred = []
 
     with torch.no_grad():
+        if args.single: bar = tqdm(total=len(eval_loader), desc=f'Evaluating {args.model}', unit='imgs')
         for batch_idx, sampled_batch in enumerate(eval_loader):
             name = sampled_batch['name']
             batch, time = sampled_batch['labels'].shape[:2]
@@ -48,6 +50,11 @@ def eval_model(model, eval_loader):
                 e2 += 1
             if distance <= 3:
                 e3 += 1
+            if bar:
+                bar.set_postfix({
+                    "exprate": exp_right / cal_num
+                })
+                bar.update(1)
 
         return loss_meter.mean, word_right / length, exp_right / cal_num, pred, [e1 / cal_num, e2 / cal_num, e3 / cal_num]
 
@@ -56,13 +63,22 @@ if __name__ == '__main__':
     parser.add_argument('--epo', default=0, type=int)
     parser.add_argument('--expname', default='', type=str)
     parser.add_argument('--gpu', default='', type=str)
+    parser.add_argument('--single', action='store_true')
+    parser.add_argument('--dataset', default='CROHME', type=str, choices=['CROHME', 'HME100K'])
+    parser.add_argument('--model', default='SSAN_CAN_DWAP', type=str, choices=['SSAN_DWAP', 'SSAN_CAN_DWAP', 'SSAN_SAM_DWAP'])
+    parser.add_argument('--cp', default='', type=str)
     args = parser.parse_args()
 
-    params = load_config(opj("results", args.expname, f"{args.expname}.yaml"))
+    config_path = "config.yaml" if args.single else opj("results", args.expname, f"{args.expname}.yaml")
+    params = load_config(config_path)
     os.environ['CUDA_VISIBLE_DEVICES'] = params['Test_GPU'] if args.gpu == '' else args.gpu
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     params['device'] = device
     params['local_rank'] = device
+
+    params['dataset_name'] = args.dataset if args.single else params['dataset_name']
+    params['model'] = args.model if args.single else params['model']
+    checkpoint_path = args.cp if args.single else opj(params['checkpoint_dir'], args.expname, "temp_model.pth")
 
     alphabet = ALPHABET(params['alphabet_path'])
     eval_loaders = []
@@ -88,21 +104,24 @@ if __name__ == '__main__':
     module = importlib.import_module(f"models.{model_name}")
     model = getattr(module, model_name)(params).to(device)
 
-    state = torch.load(opj(params['checkpoint_dir'], args.expname, "temp_model.pth"), map_location='cpu')
+    state = torch.load(checkpoint_path, map_location='cpu')
     model.load_state_dict(state['model'])
 
     for idx, eval_loader in enumerate(eval_loaders):
         eval_loss, eval_word_score, eval_exprate, pred, error = eval_model(model, eval_loader)
-        with open(opj(params['checkpoint_dir'], args.expname, f"exprate_{keywords[idx]}.best"), "r") as bestrate:
-            best_exprate = float(bestrate.read())
-        if eval_exprate > best_exprate:
-            with open(opj(params['checkpoint_dir'], args.expname, f"exprate_{keywords[idx]}.best"), "w") as bestrate:
-                bestrate.write(str(eval_exprate))
-        with open(opj(params['checkpoint_dir'], args.expname, "eval.log"), "a", encoding='utf-8') as eval_log_file:
-            eval_log_file.write(f'Epoch: {args.epo+1} loss: {eval_loss:.4f} word score: {eval_word_score:.4f} ExpRate: {eval_exprate:.4f}\n')
-            eval_log_file.write(f'Epoch: {args.epo+1} 1Error: {error[0]:.4f} 2Error: {error[1]:.4f} 3Error: {error[2]}\n')
+        if args.single:
+            print(f'{args.model} Evaluation Results: \nloss: {eval_loss:.4f} word score: {eval_word_score:.4f} \n\tExpRate: {eval_exprate:.4f}\n\t1Error: {error[0]:.4f} \n\t2Error: {error[1]:.4f} \n\t3Error: {error[2]}')
+        else:
+            with open(opj(params['checkpoint_dir'], args.expname, f"exprate_{keywords[idx]}.best"), "r") as bestrate:
+                best_exprate = float(bestrate.read())
+            if eval_exprate > best_exprate:
+                with open(opj(params['checkpoint_dir'], args.expname, f"exprate_{keywords[idx]}.best"), "w") as bestrate:
+                    bestrate.write(str(eval_exprate))
+            with open(opj(params['checkpoint_dir'], args.expname, "eval.log"), "a", encoding='utf-8') as eval_log_file:
+                eval_log_file.write(f'Epoch: {args.epo+1} loss: {eval_loss:.4f} word score: {eval_word_score:.4f} ExpRate: {eval_exprate:.4f}\n')
+                eval_log_file.write(f'Epoch: {args.epo+1} 1Error: {error[0]:.4f} 2Error: {error[1]:.4f} 3Error: {error[2]}\n')
 
-        if eval_exprate > best_exprate:
-            filename = f'{os.path.join(params["checkpoint_dir"], args.expname)}/{keywords[idx]}_ExpRate-{eval_exprate:.4f}_{args.epo}.pth'
-            torch.save({'model': model.state_dict()}, filename)
-            torch.save({'model': model.state_dict()}, f'{os.path.join(params["checkpoint_dir"], args.expname)}/best_model.pth')
+            if eval_exprate > best_exprate:
+                filename = f'{os.path.join(params["checkpoint_dir"], args.expname)}/{keywords[idx]}_ExpRate-{eval_exprate:.4f}_{args.epo}.pth'
+                torch.save({'model': model.state_dict()}, filename)
+                torch.save({'model': model.state_dict()}, f'{os.path.join(params["checkpoint_dir"], args.expname)}/best_model.pth')
